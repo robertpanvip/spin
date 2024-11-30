@@ -183,14 +183,12 @@ export default class ScrollObserver {
                 }
                 const scrolls = findScrollableParents(entry.target);
                 if (entry.isIntersecting) {
-                    console.log('元素出现在视口中', entry);
                     callback(getEntries(), this)
                     scrolls.forEach(ele => {
                         scrollManager.add(ele, scrollCache.get(target)!)
                     })
                 } else {
                     unobserve(target, scrolls);
-                    console.log('元素离开了视口');
                 }
             });
         }, {

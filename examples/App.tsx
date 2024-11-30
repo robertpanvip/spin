@@ -27,6 +27,20 @@ function App() {
                     </div>
                 </Spin>
             </div>
+            <Spin
+                tip='Loading'
+                spinning={count % 2 == 0}
+            >
+                <div style={{height: 600, border: '1px solid'}}>
+                </div>
+            </Spin>
+            <Spin
+                tip='Loading'
+                spinning={count % 2 == 0}
+            >
+                <div style={{height: 600, border: '1px solid'}}>
+                </div>
+            </Spin>
             <h1>Vite + React</h1>
 
             <p className="read-the-docs">
