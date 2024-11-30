@@ -1,6 +1,6 @@
 {
-  "name": "spin",
-  "description": "spin",
+  "name": "@ui-co/spin",
+  "description": "用于页面和区块的加载中状态。",
   "version": "0.0.1",
   "type": "module",
   "scripts": {
