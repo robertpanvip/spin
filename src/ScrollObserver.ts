@@ -2,15 +2,19 @@ export interface ScrollObserverCallback {
     (entries: IntersectionObserverEntry[], observer: ScrollObserver): void;
 }
 
+const CacheMap = window.WeakMap ? WeakMap : Map;
+const triggerCache = new CacheMap<Element | Document, () => void>();
+const scrollCache = new CacheMap<Element | Document, () => void>()
 // 全局滚动回调管理器
 const scrollManager = {
-    handlers: new Map<Element | Document, Set<() => void>>(),
-
+    handlers: new CacheMap<Element | Document, Set<() => void>>(),
     // 添加回调
     add(parent: Element | Document, callback: () => void) {
         if (!this.handlers.has(parent)) {
             this.handlers.set(parent, new Set());
-            parent.addEventListener("scroll", this.trigger.bind(this, parent), {passive: true});
+            const trigger = this.trigger.bind(this, parent);
+            triggerCache.set(parent, trigger)
+            parent.addEventListener("scroll", trigger, {passive: true});
         }
         this.handlers.get(parent)!.add(callback);
     },
@@ -23,7 +27,8 @@ const scrollManager = {
 
         // 如果没有剩余的回调，则移除滚动监听
         if (callbacks.size === 0) {
-            parent.removeEventListener("scroll", this.trigger.bind(this, parent));
+            const trigger = triggerCache.get(parent)!
+            parent.removeEventListener("scroll", trigger);
             this.handlers.delete(parent);
         }
     },
@@ -144,17 +149,26 @@ export function getIntersection(element: Element): IntersectionObserverEntry {
         target: element,
         time: performance?.now?.() || Date.now()
     }
-
-
 }
+
 
 export default class ScrollObserver {
     constructor(callback: ScrollObserverCallback) {
 
+        function unobserve(
+            target: Element,
+            scrolls: Set<Element | Document> = findScrollableParents(target)
+        ) {
+            scrolls.forEach(ele => {
+                scrollManager.remove(ele, scrollCache.get(target)!)
+            })
+            scrollCache.delete(target)
+        }
+
         const iob = new IntersectionObserver((entries) => {
 
             entries.forEach(entry => {
-                const target = (entry.target as unknown as Element & { __scroll?: () => void })
+                const target = entry.target;
                 const getEntries = () => {
                     return entries.map(entry => {
                         const target = entry.target as Element;
@@ -162,38 +176,42 @@ export default class ScrollObserver {
                         return getIntersection(target);
                     })
                 }
-
-                if (!target.__scroll) {
-                    target.__scroll = () => {
+                if (!scrollCache.get(target)) {
+                    scrollCache.set(target, () => {
                         callback(getEntries(), this)
-                    }
+                    })
                 }
                 const scrolls = findScrollableParents(entry.target);
                 if (entry.isIntersecting) {
                     console.log('元素出现在视口中', entry);
                     callback(getEntries(), this)
                     scrolls.forEach(ele => {
-                        scrollManager.add(ele, target.__scroll!)
+                        scrollManager.add(ele, scrollCache.get(target)!)
                     })
                 } else {
-                    scrolls.forEach(ele => {
-                        scrollManager.remove(ele, target.__scroll!)
-                    })
-                    target.__scroll = undefined;
+                    unobserve(target, scrolls);
                     console.log('元素离开了视口');
                 }
             });
         }, {
             threshold: [0, 1]
         })
+        const targets = new Set<Element>();
         this.observe = function (target: Element) {
             iob.observe(target);
+            targets.add(target)
         }
         this.unobserve = function (target: Element) {
             iob.unobserve(target);
+            targets.delete(target);
+            unobserve(target);
         }
         this.disconnect = function () {
-            iob.disconnect()
+            iob.disconnect();
+            targets.forEach((target) => {
+                unobserve(target)
+            });
+            targets.clear();
         }
     }
 
