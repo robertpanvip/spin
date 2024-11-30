@@ -77,6 +77,7 @@ const RefRender: React.ForwardRefRenderFunction<
       {props.children}
       <HTMLComment
         ref={(ref) => {
+          console.log('refff',ref);
           commentEndRef.current = ref;
           // 初次分配 ref 这时候commentRef 肯定已经有值了
           assignRef();
