@@ -1,6 +1,6 @@
 import * as React from "react"
 import {createPortal} from "react-dom";
-import {useLayoutEffect, useMemo, useRef} from "react";
+import {useLayoutEffect, useRef} from "react";
 import ScrollObserver, {getIntersection} from "./ScrollObserver";
 import Ref from "./Ref";
 
@@ -105,6 +105,26 @@ const css = (
         }
     }
     `
+const styleMap = new Map<string, number>();
+
+function useInject(prefixCls: string, css: (prefixCls: string) => string) {
+    (React.useInsertionEffect || React.useLayoutEffect)(() => {
+        const textContent = css(prefixCls);
+        let count = styleMap.get(textContent) || 0
+        count = count + 1;
+        styleMap.set(textContent, count);
+        if (count === 1) {
+            const style = document.createElement('style');
+            style.textContent = textContent;
+            style.id = shortUUID(textContent);
+            document.head.appendChild(style)
+        }
+        return () => {
+            count = count - 1;
+            styleMap.set(textContent, count);
+        }
+    }, [prefixCls])
+}
 
 function shortUUID(inputString: string) {
     // 使用 SHA-256 哈希并转为 Base64 编码
@@ -148,7 +168,6 @@ const Spin = (
     const ref = useRef<HTMLDivElement>(null);
     const maskRef = useRef<HTMLDivElement>(null);
     const maskContentRef = useRef<HTMLDivElement>(null);
-    const styleRef = useRef<HTMLStyleElement>(null);
 
     const setStyle = (rect: DOMRect, bound: DOMRect) => {
         const {x, y, width, height} = rect;
@@ -167,6 +186,8 @@ const Spin = (
             content.style.height = `${bound.height}px`;
         }
     }
+
+    useInject(prefixCls, css);
 
     useLayoutEffect(() => {
         const target = ref.current!
@@ -194,7 +215,6 @@ const Spin = (
         }
     }, [spinning, prefixCls])
 
-    const defaultStyle = useMemo(() => css(prefixCls), [prefixCls])
     const content = (
         <>
             <div className={`${prefixCls}indicator`}>
@@ -208,9 +228,6 @@ const Spin = (
             <Ref ref={ref}>
                 {children}
             </Ref>
-            {
-                spinning && createPortal(<style ref={styleRef}>{defaultStyle}</style>, document.head)
-            }
             {
                 spinning && createPortal(
                     <div className={`${prefixCls}anchor`}>
