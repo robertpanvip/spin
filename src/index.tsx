@@ -10,6 +10,8 @@ export interface SpinProps {
     children?: React.ReactNode;
     spinning?: boolean;
     tip?: React.ReactNode;
+    /**target 元素的位置跟随目标元素  parent 元素的位置跟随父元素*/
+    followMode?: 'target' | 'parent'
 }
 
 interface DOMRect {
@@ -40,7 +42,15 @@ const css = (
          gap: 10px;
          background: rgba(0, 0, 0, 0.3);
     }
-    .${prefixCls}anchor>.${prefixCls}mask>.${prefixCls}indicator{
+     .${prefixCls}anchor .${prefixCls}content {
+         position: absolute;
+         display:flex;
+         align-items: center;
+         justify-content: center;
+         flex-direction: column;
+         gap: 10px;
+    }
+    .${prefixCls}anchor .${prefixCls}indicator{
         line-height:0;
         animation: ${prefixCls}rotateAnimation 1s linear infinite; /* 应用动画 */
     }
@@ -79,6 +89,7 @@ const Spin: React.FC<SpinProps> = (
         tip,
         children,
         spinning = false,
+        followMode = 'parent',
         prefixCls = `${shortUUID(css(''))}`
     }
 ) => {
@@ -87,15 +98,23 @@ const Spin: React.FC<SpinProps> = (
     }
     const ref = useRef<HTMLDivElement>(null);
     const maskRef = useRef<HTMLDivElement>(null);
+    const maskContentRef = useRef<HTMLDivElement>(null);
     const styleRef = useRef<HTMLStyleElement>(null);
 
-    const setStyle = (rect: DOMRect) => {
+    const setStyle = (rect: DOMRect, bound: DOMRect) => {
         const {x, y, width, height} = rect;
         const target = maskRef.current!
         target.style.left = `${x}px`;
         target.style.top = `${y}px`;
         target.style.width = `${width}px`;
         target.style.height = `${height}px`;
+        if (followMode === 'target') {
+            const content = maskContentRef.current!;
+            content.style.left = `${bound.x - x}px`;
+            content.style.top = `${bound.y - y}px`;
+            content.style.width = `${bound.width}px`;
+            content.style.height = `${bound.height}px`;
+        }
     }
 
     useLayoutEffect(() => {
@@ -104,13 +123,13 @@ const Spin: React.FC<SpinProps> = (
             return () => void 0
         }
         const rob = new ResizeObserver(() => {
-            const {intersectionRect} = getIntersection(target);
-            setStyle(intersectionRect)
+            const {intersectionRect, boundingClientRect} = getIntersection(target);
+            setStyle(intersectionRect, boundingClientRect)
         });
         rob.observe(target);
         const sb = new ScrollObserver((entries) => {
             entries.forEach(entry => {
-                setStyle(entry.intersectionRect)
+                setStyle(entry.intersectionRect, entry.boundingClientRect)
             });
         })
         sb.observe(target);
@@ -123,7 +142,14 @@ const Spin: React.FC<SpinProps> = (
     }, [spinning, prefixCls])
 
     const defaultStyle = useMemo(() => css(prefixCls), [prefixCls])
-
+    const content = (
+        <>
+            <div className={`${prefixCls}indicator`}>
+                {indicator}
+            </div>
+            <div className={`${prefixCls}tip`}>{tip}</div>
+        </>
+    )
     return (
         <>
             <Ref ref={ref}>
@@ -136,10 +162,16 @@ const Spin: React.FC<SpinProps> = (
                 spinning && createPortal(
                     <div className={`${prefixCls}anchor`}>
                         <div className={`${prefixCls}mask`} ref={maskRef}>
-                            <div className={`${prefixCls}indicator`}>
-                                {indicator}
-                            </div>
-                            <div className={`${prefixCls}tip`}>{tip}</div>
+                            {
+                                followMode === 'target' && (
+                                    <div className={`${prefixCls}content`} ref={maskContentRef}>
+                                        {content}
+                                    </div>
+                                )
+                            }
+                            {
+                                followMode === 'parent' && content
+                            }
                         </div>
                     </div>,
                     document.body
